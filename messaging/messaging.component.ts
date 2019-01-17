@@ -47,6 +47,7 @@ export class MessagingComponent {
 	inboxes = [];
 	tenants = [];
 	objectForm = [];
+	deletedMessageIds = [];
 	pristineObject: any;
 	selectedList: string;
 	pointerIsSwiping = false;
@@ -57,6 +58,7 @@ export class MessagingComponent {
 	inboxLastMessage: HTMLElement;
 	swipedStartX = 0;
 	deleteDelta = 0;
+	messageTotal = 0;
 	nextId = 1;
 	clickedEditBroadcast = false;
 	messageSubscription;
@@ -106,9 +108,10 @@ export class MessagingComponent {
 		let inboxUsername = '';
 		const messageIdsToDelete = [];
 		let foundLatestMessage;
-		const deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
+		this.deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
 		this.messageSubscription = this.messagingService.getMessageHistory().subscribe(response => {
 			const messages = response.json();
+			this.messageTotal = messages.length;
 			messages.sort((a, b) => {
 				const aUsername = a.ToUser === username ? a.FromUser : a.ToUser;
 				const bUsername = b.ToUser === username ? b.FromUser : b.ToUser;
@@ -121,7 +124,7 @@ export class MessagingComponent {
 				const timestamp = dateTime.format('YYYY-MM-DD[T]HH:mm:ss');
 				if ((message.ToUser === username || message.FromUser === username) && message.IsBroadcast === false) {
 					const messageId = message.MessageText.indexOf('~') > -1 ? message.MessageText.split('~')[0] : message.Id;
-					if (deletedMessageIds.indexOf(messageId) === -1) {
+					if (this.deletedMessageIds.indexOf(messageId) === -1) {
 						inboxUsername = message.ToUser === username ? message.FromUser : message.ToUser;
 						const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
 						foundLatestMessage = latestMessages.find(m => m.Username === inboxUsername);
@@ -147,6 +150,9 @@ export class MessagingComponent {
 							if (latestMessages.length === this.inboxes.length) {
 								this.inboxes.sort((a, b) => {
 									return a.Timestamp < b.Timestamp ? 1 : -1;
+								});
+								this.inboxes.forEach(inbox => {
+									console.log('inbox', inbox.Username, inbox.Timestamp);
 								});
 								this.observeNewMessages();
 							}

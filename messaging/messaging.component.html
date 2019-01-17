@@ -68,3 +68,4 @@
 <app-messaging-chat #messagingChat [messageFieldName]="'messagingMessageField'"></app-messaging-chat>
 <app-messaging-list-add #listAdd id="listAdd" (onSave)='saveGroup($event)' [listType]="'Users'"></app-messaging-list-add>
 <rmp-user-selector #messagingUser id="messagingUser" (onFullClose)="fullClose($event)" (onSelect)='processUserSelect($event)' [usersInput]='inboxes' [singleSelect]='true' [parentData]="{title:'Messaging'}"></rmp-user-selector>
+<div hidden class="deletedMessageIds">{{deletedMessageIds}}</div>

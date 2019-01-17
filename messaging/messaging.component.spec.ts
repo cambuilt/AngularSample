@@ -28,7 +28,7 @@ describe('MessagingComponent', () => {
 			providers: [ { provide: APP_BASE_HREF, useValue: '/' } ]
 		});
 
-		component = TestBed.createComponent(AppComponent);
+		component = TestBed.createComponent(MessagingComponent);
 	});
 
 	it('should have a title', () => {
