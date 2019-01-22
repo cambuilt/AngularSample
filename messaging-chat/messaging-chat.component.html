@@ -1,11 +1,11 @@
 <div [ngClass]="{'show': isDrawerOpen == true, 'drawer-overlay-blank': messageType.indexOf('Notify') === -1, 'drawer-overlay': messageType.indexOf('Notify') > -1}" (click)="clickOverlay()"></div>
 <div class="drawer-container" [ngClass]="{'show': isDrawerOpen == true, 'hideShadow': messageType.indexOf('Notify') === -1}">
 	<mat-toolbar color="white">
-		<mat-icon class="back-arrow" (click)="closeDrawer()">arrow_back</mat-icon>
+		<mat-icon class="back-arrow" id="messagingChatBackArrow" (click)="closeDrawer()">arrow_back</mat-icon>
 		<!-- this needs to be the name of user you're messaging -->
 		<div class="drawer-header-text">{{ headerText }}</div>
 	</mat-toolbar>
-	<div class="drawer-content" style="max-height: calc(100% - 147px); padding-top: 18px;">
+	<div class="drawer-content" id="chatMessagingDrawer" style="max-height: calc(100% - 147px); padding-top: 18px;">
 		<div *ngIf="displayMessagesStore.length > 0">
 			<div class='messaging' *ngFor='let message of displayMessagesStore'>
 				<div style="width:100%;">
@@ -29,6 +29,6 @@
 		<mat-form-field style="width: 309px; position: absolute; top: 2px; left: 24px;">
 			<input matInput [(ngModel)]="message" id='{{messageFieldName}}' (keyup)="handleEnter($event);" />
 		</mat-form-field>
-		<mat-icon color='primary' style="position: absolute; top: 9px; right: 58px;" (click)="sendMessage();">send</mat-icon>
+		<mat-icon color='primary' id="sendButton" class="sendButton" (click)="sendMessage();">send</mat-icon>
 	</div>
 </div>

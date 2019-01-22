@@ -95,3 +95,9 @@
     font-size: 10px;
     margin-bottom: 12px;
 }
+
+.sendButton {
+    position: absolute; 
+    top: 9px; 
+    right: 58px;
+}

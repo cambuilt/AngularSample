@@ -139,6 +139,7 @@ export class MessagingComponent {
 					}
 				}
 			});
+			let messagesSkipped = 0;
 			latestMessages.forEach(message => {
 				const time = this.getInboxTime(message);
 				const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
@@ -147,15 +148,20 @@ export class MessagingComponent {
 						const user = messageResponse.json();
 						if (!this.inboxes.find(i => i.Username === user.Username)) {
 							this.inboxes.push({Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: messageText, LastMessageTime: time, Timestamp: message.Timestamp.replace('T', ' '), Check: false});
-							if (latestMessages.length === this.inboxes.length) {
+							if (latestMessages.length - messagesSkipped === this.inboxes.length) {
 								this.inboxes.sort((a, b) => {
 									return a.Timestamp < b.Timestamp ? 1 : -1;
 								});
-								this.inboxes.forEach(inbox => {
-									console.log('inbox', inbox.Username, inbox.Timestamp);
-								});
 								this.observeNewMessages();
 							}
+						}
+					}, error => {
+						messagesSkipped++;
+						if (latestMessages.length - messagesSkipped === this.inboxes.length) {
+							this.inboxes.sort((a, b) => {
+								return a.Timestamp < b.Timestamp ? 1 : -1;
+							});
+							this.observeNewMessages();
 						}
 					});
 				} else {
