@@ -31,7 +31,7 @@ describe('AuthService', () => {
 
 	it('should successfully login', (done: DoneFn) => {
 		const desktopJWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJEZXNrdG9wIn0=.zT3I6hOak90xH5VEhSzLtVMHeBeaSnn0PD4rNBC1dRM=';
-		authService.login('rsa', 'camrsa', 'Password2!', desktopJWT).subscribe(response => {
+		authService.login('rsa', 'camrsa', 'Password2!', desktopJWT, '').subscribe(response => {
 			expect(response.status).toBe(200);
 			const json = response.json();
 			const role = 'RMP_RSA';

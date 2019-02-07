@@ -47,7 +47,6 @@ export class MessagingComponent {
 	inboxes = [];
 	tenants = [];
 	objectForm = [];
-	deletedMessageIds = [];
 	pristineObject: any;
 	selectedList: string;
 	pointerIsSwiping = false;
@@ -57,13 +56,13 @@ export class MessagingComponent {
 	broadcastGroupInfoElement: HTMLElement;
 	inboxLastMessage: HTMLElement;
 	swipedStartX = 0;
-	deleteDelta = 0;
+	// deleteDelta = 0;
 	messageTotal = 0;
 	nextId = 1;
 	clickedEditBroadcast = false;
-	messageSubscription;
-	messageChatSubscription;
-	messageNewUserChatSubscription;
+	messageSubscription: any;
+	messageChatSubscription: any;
+	messageNewUserChatSubscription: any;
 	hasBroadcastPermission = false;
 	inboxMessageIds = {};
 	loading = true;
@@ -103,18 +102,17 @@ export class MessagingComponent {
 	loadInboxes() {
 		this.inboxes = [];
 		const latestMessages = [];
-		// this.messagingService.sendToSocket({ Action: 'GetMessageHistory' });
- 		const { username } = this.authService.currentUser;
-		let inboxUsername = '';
-		const messageIdsToDelete = [];
+		const currentUsername = this.authService.currentUser.username;
+		let inboxUser = {Username: '', FirstName: '', LastName: '', AvatarURL: ''};
 		let foundLatestMessage;
-		this.deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
 		this.messageSubscription = this.messagingService.getMessageHistory().subscribe(response => {
 			const messages = response.json();
 			this.messageTotal = messages.length;
 			messages.sort((a, b) => {
-				const aUsername = a.ToUser === username ? a.FromUser : a.ToUser;
-				const bUsername = b.ToUser === username ? b.FromUser : b.ToUser;
+				const aToUsername = a.ToUser ? a.ToUser.Username : '';
+				const bToUsername = b.ToUser ? b.ToUser.Username : '';
+				const aUsername = aToUsername === currentUsername ? a.FromUser.Username : aToUsername;
+				const bUsername = bToUsername === currentUsername ? b.FromUser.Username : bToUsername;
 				return aUsername + a.Timestamp < bUsername + b.Timestamp ? 1 : -1;
 			});
 
@@ -122,51 +120,36 @@ export class MessagingComponent {
 				const dateTime = moment(message.Timestamp, 'YYYY-MM-DD[T]HH:mm:ss').add(this.tzOffset, 'hours');
 				const time = dateTime.format('h:mm a');
 				const timestamp = dateTime.format('YYYY-MM-DD[T]HH:mm:ss');
-				if ((message.ToUser === username || message.FromUser === username) && message.IsBroadcast === false) {
-					const messageId = message.MessageText.indexOf('~') > -1 ? message.MessageText.split('~')[0] : message.Id;
-					if (this.deletedMessageIds.indexOf(messageId) === -1) {
-						inboxUsername = message.ToUser === username ? message.FromUser : message.ToUser;
-						const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
-						foundLatestMessage = latestMessages.find(m => m.Username === inboxUsername);
-						if (!foundLatestMessage) {
-							latestMessages.push({ Username: inboxUsername, MessageText: messageText, Time: time, Timestamp: timestamp });
-						}
-						if (!this.inboxMessageIds[inboxUsername]) {
-							this.inboxMessageIds[inboxUsername] = [messageId];
-						} else {
-							this.inboxMessageIds[inboxUsername].push(messageId);
-						}
+				const toUsername = message.ToUser ? message.ToUser.Username : '';
+
+				if ((toUsername === currentUsername || message.FromUser.Username === currentUsername) && message.IsBroadcast === false) {
+					inboxUser = this.getInboxUser(message);
+					foundLatestMessage = latestMessages.find(m => m.Username === inboxUser.Username);
+					if (!foundLatestMessage) {
+						latestMessages.push({ Username: inboxUser.Username, FirstName: inboxUser.FirstName, LastName: inboxUser.LastName, AvatarURL: inboxUser.AvatarURL, MessageText: message.MessageText, Time: time, Timestamp: timestamp });
+					}
+					if (!this.inboxMessageIds[inboxUser.Username]) {
+						this.inboxMessageIds[inboxUser.Username] = [message.Id];
+					} else {
+						this.inboxMessageIds[inboxUser.Username].push(message.Id);
 					}
 				}
 			});
+
 			let messagesSkipped = 0;
 			latestMessages.forEach(message => {
 				const time = this.getInboxTime(message);
-				const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
-				if (this.inboxes.find(inbox => inbox.Username === message.Username) === undefined && message.Username !== username) {
-					this.userService.getUser(message.Username).subscribe(messageResponse => {
-						const user = messageResponse.json();
-						if (!this.inboxes.find(i => i.Username === user.Username)) {
-							this.inboxes.push({Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: messageText, LastMessageTime: time, Timestamp: message.Timestamp.replace('T', ' '), Check: false});
-							if (latestMessages.length - messagesSkipped === this.inboxes.length) {
-								this.inboxes.sort((a, b) => {
-									return a.Timestamp < b.Timestamp ? 1 : -1;
-								});
-								this.observeNewMessages();
-							}
-						}
-					}, error => {
-						messagesSkipped++;
-						if (latestMessages.length - messagesSkipped === this.inboxes.length) {
-							this.inboxes.sort((a, b) => {
-								return a.Timestamp < b.Timestamp ? 1 : -1;
-							});
-							this.observeNewMessages();
-						}
-					});
+				if (this.inboxes.find(inbox => inbox.Username === message.Username) === undefined && message.Username !== currentUsername) {
+					this.inboxes.push({ Username: message.Username, FirstName: message.FirstName, LastName: message.LastName, AvatarURL: message.AvatarURL, Initials: this.utilsService.getInitials(message), LastMessage: message.MessageText, LastMessageTime: time, Timestamp: message.Timestamp.replace('T', ' '), Check: false });
+					if (latestMessages.length - messagesSkipped === this.inboxes.length) {
+						this.inboxes.sort((a, b) => {
+							return a.Timestamp < b.Timestamp ? 1 : -1;
+						});
+						this.observeNewMessages();
+					}
 				} else {
 					const inbox = this.inboxes.find(i => i.Username === message.Username);
-					inbox.LastMessage = messageText;
+					inbox.LastMessage = message.MessageText;
 					inbox.LastMessageTime = time;
 					inbox.Timestamp = message.Timestamp;
 					if (latestMessages.length === this.inboxes.length) {
@@ -177,10 +160,6 @@ export class MessagingComponent {
 					}
 				}
 			});
-
-			if (messageIdsToDelete.length > 0) {
-				this.messagingService.sendToSocket({ Action: 'DeleteMessages', MessageIds: messageIdsToDelete });
-			}
 			this.loading = false;
 		}, error => {
 			console.log('error is', error);
@@ -191,51 +170,51 @@ export class MessagingComponent {
 
 	loadbroadcastGroups() {
 		if (this.utilsService.checkOnlineStatus()) {
-		this.broadcastGroups = [];
-		this.broadcastGroupService.getBroadcastGroups().subscribe(response => {
-			const allGroups = response.json();
-			allGroups.forEach(group => {
-				const newGroup: any = {};
-				newGroup.Id = group.Id;
-				newGroup.Name = group.Name;
-				if (!group.Id) {
-					console.log('group Id is missing for', group.Name);
-				}
-				newGroup.GroupType = group.GroupType;
-				if (newGroup.GroupType === 'USER') {
-					this.broadcastGroupService.getUserBroadcastGroup(group.Id).subscribe(userResponse => {
+			this.broadcastGroups = [];
+			this.broadcastGroupService.getBroadcastGroups().subscribe(response => {
+				const allGroups = response.json();
+				allGroups.forEach(group => {
+					const newGroup: any = {};
+					newGroup.Id = group.Id;
+					newGroup.Name = group.Name;
+					if (!group.Id) {
+						console.log('group Id is missing for', group.Name);
+					}
+					newGroup.GroupType = group.GroupType;
+					if (newGroup.GroupType === 'USER') {
+						this.broadcastGroupService.getUserBroadcastGroup(group.Id).subscribe(userResponse => {
+							let recipientDisplayList = '';
+							let delimiter = '';
+							newGroup.Recipients = userResponse.json().Recipients;
+							newGroup.Recipients.forEach(recipient => {
+								recipientDisplayList = `${recipientDisplayList}${delimiter}${recipient.FirstName} ${recipient.LastName}`;
+								delimiter = ', ';
+							});
+							newGroup.RecipientList = recipientDisplayList;
+							newGroup.Check = false;
+							this.broadcastGroups.push(newGroup);
+						});
+					} else {
+						newGroup.Recipients = group.Recipients;
 						let recipientDisplayList = '';
 						let delimiter = '';
-						newGroup.Recipients = userResponse.json().Recipients;
-						newGroup.Recipients.forEach(recipient => {
-							recipientDisplayList = `${recipientDisplayList}${delimiter}${recipient.FirstName} ${recipient.LastName}`;
-							delimiter = ', ';
-						});
+						if (newGroup.Recipients) {
+							newGroup.Recipients.forEach(recipient => {
+								recipientDisplayList = `${recipientDisplayList}${delimiter}${recipient}`;
+								delimiter = ', ';
+							});
+						}
 						newGroup.RecipientList = recipientDisplayList;
 						newGroup.Check = false;
 						this.broadcastGroups.push(newGroup);
-					});
-				} else {
-					newGroup.Recipients = group.Recipients;
-					let recipientDisplayList = '';
-					let delimiter = '';
-					if (newGroup.Recipients) {
-						newGroup.Recipients.forEach(recipient => {
-							recipientDisplayList = `${recipientDisplayList}${delimiter}${recipient}`;
-							delimiter = ', ';
-						});
 					}
-					newGroup.RecipientList = recipientDisplayList;
-					newGroup.Check = false;
-					this.broadcastGroups.push(newGroup);
-				}
-				this.nextId = (group.Id as number);
-				this.nextId++;
+					this.nextId = (group.Id as number);
+					this.nextId++;
+				});
+			}, error => {
+				console.log('broadcast list error is ', error);
 			});
-		}, error => {
-			console.log('broadcast list error is ', error);
-		});
-	}
+		}
 	}
 
 	loadUserDataComplete(response) {
@@ -251,7 +230,7 @@ export class MessagingComponent {
 	saveGroup(broadcastGroup) {
 		let recipientDisplayList = '';
 		let delimiter = '';
-		const broadcastGroupBody = {Name: broadcastGroup.Name, Recipients: []};
+		const broadcastGroupBody = { Name: broadcastGroup.Name, Recipients: [] };
 		if (broadcastGroup.Recipients) {
 			broadcastGroup.Recipients.forEach(recipient => {
 				if (broadcastGroup.GroupType === 'USER') {
@@ -265,11 +244,12 @@ export class MessagingComponent {
 				delimiter = ', ';
 			});
 		}
+
 		if (this.listAdd.editing === true && broadcastGroup.Id !== undefined) {
 			if (broadcastGroup.GroupType === 'TENANT') {
-				this.broadcastGroupService.updateTenantBroadcastGroup(broadcastGroup.Id, JSON.stringify(broadcastGroupBody)).subscribe(response => { this.saveOnComplete(response);	});
+				this.broadcastGroupService.updateTenantBroadcastGroup(broadcastGroup.Id, JSON.stringify(broadcastGroupBody)).subscribe(response => { this.saveOnComplete(response); });
 			} else {
-				this.broadcastGroupService.updateUserBroadcastGroup(broadcastGroup.Id, JSON.stringify(broadcastGroupBody)).subscribe(response => { this.saveOnComplete(response);	});
+				this.broadcastGroupService.updateUserBroadcastGroup(broadcastGroup.Id, JSON.stringify(broadcastGroupBody)).subscribe(response => { this.saveOnComplete(response); });
 			}
 			broadcastGroup.RecipientList = recipientDisplayList;
 		} else {
@@ -305,6 +285,18 @@ export class MessagingComponent {
 			duration: 2000,
 			horizontalPosition: 'right'
 		});
+	}
+
+	getInboxUser(message) {
+		const aToUsername = message.ToUser ? message.ToUser.Username : '';
+		const aToFirstName = message.ToUser ? message.ToUser.FirstName : '';
+		const aToLastName = message.ToUser ? message.ToUser.LastName : '';
+		const aToAvatarURL = message.ToUser ? message.ToUser.AvatarURL : '';
+		if (aToUsername === this.authService.currentUser.username) {
+			return {Username: message.FromUser.Username, FirstName : message.FromUser.FirstName, LastName: message.FromUser.LastName, AvatarURL: message.FromUser.AvatarURL };
+		} else {
+			return {Username: aToUsername, FirstName : aToFirstName, LastName: aToLastName, AvatarURL: aToAvatarURL };
+		}
 	}
 
 	tabClick() {
@@ -348,44 +340,54 @@ export class MessagingComponent {
 		if (this.messageSubscription) {
 			this.messageSubscription.unsubscribe();
 		}
-		const deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
 		this.messageSubscription = this.messagingService.messages.subscribe(messages => {
+			console.log('observeNewMessages got', messages);
 			if (messages.length > 0) {
 				const ids = [];
 				const addedInboxes = [];
+				const inboxLastMessages = [];
 				messages.forEach(message => {
 					if (message.IsBroadcast === false) {
-						const inboxUsername = message.ToUser === username ? message.FromUser : message.ToUser;
-						const messageId = message.MessageText.indexOf('~') > -1 ? message.MessageText.split('~')[0] : message.Id;
+						const inboxUser = this.getInboxUser(message);
+						const dateTime = moment(message.Timestamp, 'YYYY-MM-DD[T]HH:mm:ss').add(this.tzOffset, 'hours');
+						const timestamp = dateTime.format('YYYY-MM-DD HH:mm:ss');
+						message.Timestamp = timestamp;
 						const time = this.getInboxTime(message);
-						const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
 
-						if (deletedMessageIds.indexOf(messageId) === -1 && this.inboxMessageIds[inboxUsername] && this.inboxMessageIds[inboxUsername].indexOf(messageId) === -1) {
-							let inbox = this.inboxes.find(i => i.Username === inboxUsername);
+						if (this.inboxMessageIds[inboxUser.Username] && this.inboxMessageIds[inboxUser.Username].indexOf(message.Id) === -1) {
+							let inbox = this.inboxes.find(i => i.Username === inboxUser.Username);
 
 							if (!inbox) {
-								if (addedInboxes.indexOf(inboxUsername) === -1) {
-									addedInboxes.push(inboxUsername);
-									this.userService.getUser(inboxUsername).subscribe(response => {
-										const user = response.json();
-										inbox = this.inboxes.find(i => i.Username === user.Username);
-										if (!inbox) {
-											this.inboxes.push({Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: messageText, LastMessageTime: time, Timestamp: message.Timestamp, Check: false});
-										}
-									});
+								if (addedInboxes.indexOf(inboxUser.Username) === -1) {
+									addedInboxes.push(inboxUser.Username);
+									inbox = this.inboxes.find(i => i.Username === message.Username);
+									if (!inbox) {
+										this.inboxes.push({ Username: inboxUser.Username, FirstName: inboxUser.FirstName, LastName: inboxUser.LastName, AvatarURL: inboxUser.AvatarURL, Initials: this.utilsService.getInitials(inboxUser), LastMessage: message.MessageText, LastMessageTime: time, Timestamp: timestamp, Check: false });
+									}
 								}
 							} else {
-								if (inbox.Timestamp < message.Timestamp) {
-									inbox.LastMessage = messageText;
-									inbox.LastMessageTime = time;
-									inbox.Timestamp = message.Timestamp;
+								const inboxLastMessage = inboxLastMessages.find(i => i.Username === inboxUser.Username);
+								if (!inboxLastMessage) {
+									inboxLastMessages.push({Username: inboxUser.Username, FirstName: inboxUser.FirstName, LastName: inboxUser.LastName, AvatarURL: inboxUser.AvatarURL, Timestamp: timestamp, LastMessage: message.MessageText, LastMessageTime: time});
+								} else {
+									if (inboxLastMessage.Timestamp < timestamp) {
+										inboxLastMessage.LastMessage = message.MessageText;
+										inboxLastMessage.LastMessageTime = time;
+										inboxLastMessage.Timestamp = timestamp;
+									}
 								}
 							}
-						// } else {
-						// 	console.log('message deleted or already added:', messageText, ', id ', messageId);
 						}
 						ids.push(message.Id);
 						this.messagingService.messageIdsMarkedAsRead.push(message.Id);
+					}
+				});
+				inboxLastMessages.forEach(inboxLastMessage => {
+					const inbox = this.inboxes.find(i => i.Username === inboxLastMessage.Username);
+					if (inbox) {
+						inbox.LastMessage = inboxLastMessage.LastMessage;
+						inbox.LastMessageTime = inboxLastMessage.LastMessageTime;
+						inbox.Timestamp = inboxLastMessage.Timestamp;
 					}
 				});
 				if (ids.length > 0) {
@@ -402,22 +404,21 @@ export class MessagingComponent {
 	observeSentChatMessages() {
 		if (!this.messageChatSubscription) {
 			this.messageChatSubscription = this.messagingChat.displayMessages.subscribe(messages => {
+				console.log('observeSentChatMessages got', messages);
 				if (messages.length > 0) {
 					messages.forEach(message => {
-						if (!this.inboxMessageIds[message.ToUser]) {
-							this.inboxMessageIds[message.ToUser] = [];
+						if (!this.inboxMessageIds[message.ToUser.Username]) {
+							this.inboxMessageIds[message.ToUser.Username] = [];
 						}
-						if (this.inboxMessageIds[message.ToUser].indexOf(message.Id) === -1) {
-							this.inboxMessageIds[message.ToUser].push(message.Id);
+						if (message.Id !== undefined && this.inboxMessageIds[message.ToUser.Username].indexOf(message.Id) === -1) {
+							this.inboxMessageIds[message.ToUser.Username].push(message.Id);
 						}
 					});
-					const { username } = this.authService.currentUser;
 					const lastMessage = messages[messages.length - 1];
 					const time = this.getInboxTime(lastMessage);
-					const messageText = lastMessage.MessageText.indexOf('~') > -1 ? lastMessage.MessageText.substring(lastMessage.MessageText.indexOf('~') + 1) : lastMessage.MessageText;
-					const inboxUsername = lastMessage.ToUser === username ? lastMessage.FromUser : lastMessage.ToUser;
-					const inbox = this.inboxes.find(i => i.Username === inboxUsername);
-					inbox.LastMessage = messageText;
+					const inboxUser = this.getInboxUser(lastMessage);
+					const inbox = this.inboxes.find(i => i.Username === inboxUser.Username);
+					inbox.LastMessage = lastMessage.MessageText;
 					inbox.LastMessageTime = time;
 					inbox.Timestamp = lastMessage.Timestamp;
 
@@ -432,32 +433,28 @@ export class MessagingComponent {
 	observeNewUserChatMessages() {
 		if (!this.messageNewUserChatSubscription) {
 			this.messageNewUserChatSubscription = this.messagingUser.newUserChatMessages.subscribe(messages => {
+				console.log('observeNewUserChatMessages got', messages);
 				messages.forEach(message => {
 					const time = this.getInboxTime(message);
-					const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
-					if (!this.inboxMessageIds[message.ToUser]) {
-						this.inboxMessageIds[message.ToUser] = [];
+					if (!this.inboxMessageIds[message.ToUser.Username]) {
+						this.inboxMessageIds[message.ToUser.Username] = [];
 					}
-					if (this.inboxMessageIds[message.ToUser].indexOf(message.Id) === -1) {
-						this.inboxMessageIds[message.ToUser].push(message.Id);
+					if (message.Id !== undefined && this.inboxMessageIds[message.ToUser.Username].indexOf(message.Id) === -1) {
+						this.inboxMessageIds[message.ToUser.Username].push(message.Id);
 					}
-					const { username } = this.authService.currentUser;
 					const lastMessage = messages[messages.length - 1];
-					const inboxUsername = lastMessage.ToUser === username ? lastMessage.FromUser : lastMessage.ToUser;
+					const inboxUser = this.getInboxUser(lastMessage);
 
-					this.userService.getUser(inboxUsername).subscribe(response => {
-						const user = response.json();
-						if (this.inboxes.find(box => box.Username === user.Username) === undefined && this.inboxMessageIds[user.Username]) {
-							this.inboxes.push({ Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: messageText, LastMessageTime: time, Timestamp: lastMessage.Timestamp, Check: false });
-						} else {
-							const inbox = this.inboxes.find(i => i.Username === inboxUsername);
-							inbox.LastMessage = messageText;
-							inbox.LastMessageTime = time;
-							inbox.Timestamp = lastMessage.Timestamp;
-						}
-						this.inboxes.sort((a, b) => {
-							return a.Timestamp < b.Timestamp ? 1 : -1;
-						});
+					if (!this.inboxes.find(box => box.Username === inboxUser.Username) && (!this.inboxMessageIds[inboxUser.Username] || this.inboxMessageIds[inboxUser.Username].length === 0)) {
+						this.inboxes.push({ Username: inboxUser.Username, FirstName: inboxUser.FirstName, LastName: inboxUser.LastName, AvatarURL: inboxUser.AvatarURL, Initials: this.utilsService.getInitials({FirstName: inboxUser.FirstName, LastName: inboxUser.LastName}), LastMessage: message.MessageText, LastMessageTime: time, Timestamp: lastMessage.Timestamp, Check: false });
+					} else {
+						const inbox = this.inboxes.find(i => i.Username === inboxUser.Username);
+						inbox.LastMessage = message.MessageText;
+						inbox.LastMessageTime = time;
+						inbox.Timestamp = lastMessage.Timestamp;
+					}
+					this.inboxes.sort((a, b) => {
+						return a.Timestamp < b.Timestamp ? 1 : -1;
 					});
 				});
 			});
@@ -555,47 +552,47 @@ export class MessagingComponent {
 		}
 	}
 
-	deleteBySwipe() {
-		this.deleteDelta = 0;
-		if (this.selectedTab === 'Private') {
-			const inboxName = this.swipedElement.getElementsByClassName('inbox-span')[0].getElementsByTagName('span')[0].innerText;
-			const inboxToDelete = this.inboxes.find(inbox => `${(inbox.FirstName as String).trim()} ${(inbox.LastName as String).trim()}` === inboxName);
-			this.deletePrivateMessages(inboxToDelete);
-			this.inboxes.splice(this.inboxes.indexOf(inboxToDelete), 1);
-		} else {
-			const broadcastGroupName = this.swipedElement.getElementsByTagName('span')[0].innerText;
-			const broadcastGroupToDelete = this.broadcastGroups.find(broadcastGroup => `${broadcastGroup.Name}` === broadcastGroupName);
-			if (broadcastGroupToDelete.GroupType === 'TENANT') {
-				this.broadcastGroupService.deleteTenantBroadcastGroup(broadcastGroupToDelete.Id).subscribe(response => {
-					if (response.status === 200) {
-						this.openSnackBar(this.translation.translate('Label.Broadcast List deleted'));
-					} else {
-						this.utilsService.showError(`Broadcast List ${this.translation.translate('Label.could not be deleted due an unknown error. If the error persists please contact support')}.`);
-					}
-				}, error => {
-					this.utilsService.showError(`Error deleting broadcast group: ${error.statusText}, error ${error.status}`);
-				});
-			} else {
-				this.broadcastGroupService.deleteUserBroadcastGroup(broadcastGroupToDelete.Id).subscribe(response => {
-					if (response.status === 200) {
-						this.openSnackBar(this.translation.translate('Label.Broadcast List deleted'));
-					} else {
-						this.utilsService.showError(`Broadcast List ${this.translation.translate('Label.could not be deleted due an unknown error. If the error persists please contact support')}.`);
-					}
-				}, error => {
-					this.utilsService.showError(`Error deleting broadcast group: ${error.statusText}, error ${error.status}`);
-				});
+	// deleteBySwipe() {
+	// 	this.deleteDelta = 0;
+	// 	if (this.selectedTab === 'Private') {
+	// 		const inboxName = this.swipedElement.getElementsByClassName('inbox-span')[0].getElementsByTagName('span')[0].innerText;
+	// 		const inboxToDelete = this.inboxes.find(inbox => `${(inbox.FirstName as String).trim()} ${(inbox.LastName as String).trim()}` === inboxName);
+	// 		this.messagingService.sendToSocket({Action: 'DeleteMessages', MessageIds: this.inboxMessageIds[inboxToDelete.Username]});
+	// 		this.inboxes.splice(this.inboxes.indexOf(inboxToDelete), 1);
+	// 	} else {
+	// 		const broadcastGroupName = this.swipedElement.getElementsByTagName('span')[0].innerText;
+	// 		const broadcastGroupToDelete = this.broadcastGroups.find(broadcastGroup => `${broadcastGroup.Name}` === broadcastGroupName);
+	// 		if (broadcastGroupToDelete.GroupType === 'TENANT') {
+	// 			this.broadcastGroupService.deleteTenantBroadcastGroup(broadcastGroupToDelete.Id).subscribe(response => {
+	// 				if (response.status === 200) {
+	// 					this.openSnackBar(this.translation.translate('Label.Broadcast List deleted'));
+	// 				} else {
+	// 					this.utilsService.showError(`Broadcast List ${this.translation.translate('Label.could not be deleted due an unknown error. If the error persists please contact support')}.`);
+	// 				}
+	// 			}, error => {
+	// 				this.utilsService.showError(`Error deleting broadcast group: ${error.statusText}, error ${error.status}`);
+	// 			});
+	// 		} else {
+	// 			this.broadcastGroupService.deleteUserBroadcastGroup(broadcastGroupToDelete.Id).subscribe(response => {
+	// 				if (response.status === 200) {
+	// 					this.openSnackBar(this.translation.translate('Label.Broadcast List deleted'));
+	// 				} else {
+	// 					this.utilsService.showError(`Broadcast List ${this.translation.translate('Label.could not be deleted due an unknown error. If the error persists please contact support')}.`);
+	// 				}
+	// 			}, error => {
+	// 				this.utilsService.showError(`Error deleting broadcast group: ${error.statusText}, error ${error.status}`);
+	// 			});
 
-			}
-			this.broadcastGroups.splice(this.broadcastGroups.indexOf(broadcastGroupToDelete), 1);
-		}
-		this.swipedElement = undefined;
-	}
+	// 		}
+	// 		this.broadcastGroups.splice(this.broadcastGroups.indexOf(broadcastGroupToDelete), 1);
+	// 	}
+	// 	this.swipedElement = undefined;
+	// }
 
 	deleteByCheckbox(event) {
 		let foundChecked = false;
-		const deleteNames = [];
 		if (this.selectedTab === 'Private') {
+			const deleteNames = [];
 			this.inboxes.forEach(inbox => {
 				if (inbox.Check === true) {
 					deleteNames.push(inbox.FirstName + ' ' + inbox.LastName);
@@ -607,7 +604,11 @@ export class MessagingComponent {
 			} else {
 				deleteNames.forEach(name => {
 					const inboxToDelete = this.inboxes.find(box => `${(box.FirstName as String).trim()} ${(box.LastName as String).trim()}` === name);
-					this.deletePrivateMessages(inboxToDelete);
+					this.messagingService.sendToSocket({ Action: 'DeleteMessages', MessageIds: this.inboxMessageIds[inboxToDelete.Username] });
+					this.inboxMessageIds[inboxToDelete.Username].forEach(id => {
+						this.messagingService.messageIdsMarkedAsRead.push(id);
+					});
+					this.inboxMessageIds[inboxToDelete.Username] = [];
 				});
 				deleteNames.forEach(name => {
 					const inboxToDelete = this.inboxes.find(box => `${(box.FirstName as String).trim()} ${(box.LastName as String).trim()}` === name);
@@ -615,9 +616,10 @@ export class MessagingComponent {
 				});
 			}
 		} else {
+			const deleteListIds = [];
 			this.broadcastGroups.forEach(list => {
 				if (list.Check === true) {
-					deleteNames.push(list.Name);
+					deleteListIds.push(list.Id);
 					this.broadcastGroupService.deleteUserBroadcastGroup(list.Id).subscribe(response => {
 						if (response.status !== 200) {
 							this.utilsService.showError('Broadcast list ' + list.Name + ' could not be deleted');
@@ -631,27 +633,10 @@ export class MessagingComponent {
 			if (foundChecked === false) {
 				this.utilsService.showError('Check at least one broadcast list before deleting.');
 			} else {
-				deleteNames.forEach(name => {
-					this.broadcastGroups.splice(this.broadcastGroups.indexOf(this.broadcastGroups.find(lst => `${lst.Name}` === name)), 1);
+				deleteListIds.forEach(id => {
+					this.broadcastGroups.splice(this.broadcastGroups.indexOf(this.broadcastGroups.find(lst => `${lst.Id}` === id)), 1);
 				});
 			}
-		}
-	}
-
-	deletePrivateMessages(inboxToDelete) {
-		const { username } = this.authService.currentUser;
-		let addedDeletedMessage: boolean;
-		const deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
-
-		this.inboxMessageIds[inboxToDelete.Username].forEach(messageId => {
-			if (deletedMessageIds.indexOf(messageId) === -1) {
-				deletedMessageIds.push(messageId);
-				addedDeletedMessage = true;
-			}
-		});
-
-		if (addedDeletedMessage === true) {
-			localStorage.setItem('DeletedMessageIds-' + username, deletedMessageIds.join(','));
 		}
 	}
 
@@ -682,7 +667,7 @@ export class MessagingComponent {
 
 	focusOnFirstListField() {
 		const firstListField: HTMLInputElement = document.querySelector('#firstListField');
-		if (firstListField)  {
+		if (firstListField) {
 			firstListField.focus();
 		}
 	}
@@ -711,7 +696,7 @@ export class MessagingComponent {
 	processUserSelect(user: any) {
 		if (this.inboxes.find(box => box.Username === user.Username) === undefined && this.inboxMessageIds[user.Username]) {
 			const time = moment().format('h:mm a');
-			this.inboxes.push({Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: '', LastMessageTime: time, Check: false});
+			this.inboxes.push({ Username: user.Username, FirstName: user.FirstName, LastName: user.LastName, AvatarURL: user.AvatarURL, Initials: this.utilsService.getInitials(user), LastMessage: '', LastMessageTime: time, Check: false });
 		}
 	}
 

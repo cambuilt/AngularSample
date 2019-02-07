@@ -32,6 +32,7 @@ export class MessagingChatComponent implements OnInit {
 	messageSubscription;
 	dateHeadersDisplayed = [];
 	tzOffset = 0;
+	drawer;
 	// MessageTypes can be 'Private', 'Broadcast', 'Collection', or 'Request'
 	constructor(private authService: AuthService, private utilsService: UtilsService, private messagingService: MessagingService) {
 	}
@@ -42,11 +43,10 @@ export class MessagingChatComponent implements OnInit {
 	}
 
 	show(messageType, user) {
+		this.drawer = document.querySelector(`#${this.messageFieldName}-chatMessagingDrawer`);
 		if (messageType === 'PrivateNotify') {
-			const bottom = document.querySelector('.scrollHere');
-			if (bottom) { bottom.scrollIntoView(false); }
+			setTimeout(() => { this.drawer.scrollTop = this.drawer.scrollHeight; });
 		}
-
 		if (user) {
 			this.headerText = user.FirstName + ' ' + user.LastName;
 			this.selectedUser = user;
@@ -56,34 +56,30 @@ export class MessagingChatComponent implements OnInit {
 		this.messageType = messageType;
 		const messageField: HTMLInputElement = document.querySelector(`#${this.messageFieldName}`);
 		messageField.focus();
+		messageField.innerText = '';
 		this.isDrawerOpen = true;
 		this.displayMessagesStore = [];
 		const { username } = this.authService.currentUser;
 		let messageAdded = false;
-		const deletedMessageIds = localStorage.getItem('DeletedMessageIds-' + username) === null ? [] : localStorage.getItem('DeletedMessageIds-' + username).split(',');
 
 		this.messageSubscription = this.messagingService.getMessageHistory().subscribe(response => {
 			const messages = response.json();
 			const ids = [];
 
 			messages.forEach(message => {
-				const localUsernameMessageId = message.MessageText.indexOf('~') > -1 ? message.MessageText.split('~')[0] : null;
 				const dateTime = moment(message.Timestamp, 'YYYY-MM-DD[T]HH:mm:ss').add(this.tzOffset, 'hours');
 				const timestamp = dateTime.format('YYYY-MM-DD[T]HH:mm:ss');
 				const time = dateTime.format('h:mm a');
 				const date = dateTime.format('M/D/YY') === moment().format('M/D/YY') ? 'Today' : dateTime.format('M/D/YY');
-				const messageText = message.MessageText.indexOf('~') > -1 ? message.MessageText.substring(message.MessageText.indexOf('~') + 1) : message.MessageText;
-				if (!this.displayMessagesStore.find(m => m.MessageText === messageText && m.Time === time)) {
+				if (!this.displayMessagesStore.find(m => m.MessageText === message.MessageText && m.Time === time)) {
 					const stringId = message.Id as string;
-					const messageId = message.MessageText.indexOf('~') > -1 ? message.MessageText.split('~')[0] : message.Id;
+					const aToUsername = message.ToUser ? message.ToUser.Username : '';
 					if (this.messageType === 'Broadcast' && message.IsBroadcast === true && message.ToGroup === this.groupId) {
-						this.displayMessagesStore.push({ Id: message.Id, FromUser: message.FromUser, ToUser: message.ToUser, MessageText: messageText, Date: date, Time: time, LocalUsernameMessageId: localUsernameMessageId, Timestamp: timestamp });
+						this.displayMessagesStore.push({ Id: message.Id, FromUser: message.FromUser, ToUser: message.ToUser, MessageText: message.MessageText, Date: date, Time: time, Timestamp: timestamp });
 						messageAdded = true;
-					} else if (this.messageType.startsWith('Private') && message.IsBroadcast === false && (message.ToUser === username || message.FromUser === username) && (message.ToUser === user.Username || message.FromUser === user.Username)) {
-						if (deletedMessageIds.indexOf(messageId) === -1) {
-							this.displayMessagesStore.push({ Id: message.Id, FromUser: message.FromUser, ToUser: message.ToUser, MessageText: messageText, Date: date, Time: time, LocalUsernameMessageId: localUsernameMessageId, Timestamp: timestamp });
-							messageAdded = true;
-						}
+					} else if (this.messageType.startsWith('Private') && message.IsBroadcast === false && (aToUsername === username || message.FromUser.Username === username) && (aToUsername === user.Username || message.FromUser.Username === user.Username)) {
+						this.displayMessagesStore.push({ Id: message.Id, FromUser: message.FromUser, ToUser: message.ToUser, MessageText: message.MessageText, Date: date, Time: time, Timestamp: timestamp });
+						messageAdded = true;
 					}
 					if (message.ToUser === username && this.messagingService.messageIdsMarkedAsRead.indexOf(stringId) === -1) {
 						ids.push(stringId);
@@ -111,13 +107,12 @@ export class MessagingChatComponent implements OnInit {
 			}
 
 			if (messageAdded === true) {
-				const bottom = document.querySelector('.scrollHere');
-				setTimeout(() => { if (bottom) { bottom.scrollIntoView(false); } });
+				setTimeout(() => { this.drawer.scrollTop = this.drawer.scrollHeight; });
 				messageAdded = false;
 			}
+
 			if (user) {
-				// tslint:disable-next-line:triple-equals
-				const newUnreadMessages = this.messagingService.unreadMessages.filter(m => m.FromUser != user.Username);
+				const newUnreadMessages = this.messagingService.unreadMessages.filter(m => m.FromUser.Username != user.Username);
 				this.messagingService.unreadMessages = newUnreadMessages;
 			}
 		});
@@ -147,11 +142,14 @@ export class MessagingChatComponent implements OnInit {
 				messageField.focus();
 				return;
 			}
-			const { username } = this.authService.currentUser;
-			const toUser = this.selectedUser ? this.selectedUser.Username : '';
+			let selectedUser = {Username: '', FirstName: '', LastName: '', AvatarURL: ''};
+
+			if (this.selectedUser) {
+				selectedUser = this.selectedUser;
+			}
+
 			const time = moment().format('h:mm a');
 			const timestamp = moment().format('YYYY-MM-DD HH:mm:ss');
-			let localUsernameMessageId = '';
 			let date = 'Today';
 
 			if (this.dateHeadersDisplayed.indexOf(date) === -1) {
@@ -168,21 +166,12 @@ export class MessagingChatComponent implements OnInit {
 					this.messagingService.sendToUserBroadcastGroup(this.groupId, JSON.stringify(message)).subscribe(response => { this.saveOnComplete(response); });
 				}
 			} else {
-				let nextId = '1';
-				if (localStorage.getItem('nextLocalMessageId') === null) {
-					localStorage.setItem('nextLocalMessageId', '2');
-				} else {
-					nextId = localStorage.getItem('nextLocalMessageId');
-					localStorage.setItem('nextLocalMessageId', `${parseInt(localStorage.getItem('nextLocalMessageId'), 10) + 1}`);
-				}
-				localUsernameMessageId = `${username}-${nextId}`;
-				this.messagingService.sendToSocket({ Action: 'SendMessage', ToUser: this.selectedUser.Username, MessageText: localUsernameMessageId + '~' + this.message });
+				this.messagingService.sendToSocket({ Action: 'SendMessage', ToUser: this.selectedUser.Username, MessageText: this.message });
 			}
 
-			this.displayMessagesStore.push({ Id: localUsernameMessageId, FromUser: username, ToUser: toUser, MessageText: this.message, Date: date, Time: time, Timestamp: timestamp, LocalUsernameMessageId: localUsernameMessageId });
+			this.displayMessagesStore.push({ FromUser: this.authService.currentUser, ToUser: selectedUser, MessageText: this.message, Date: date, Time: time, Timestamp: timestamp });
 			this.displayMessageSubject.next(this.displayMessagesStore);
-			const bottom = document.querySelector('.scrollHere');
-			setTimeout(() => bottom.scrollIntoView(false), 100);
+			setTimeout(() => { this.drawer.scrollTop = this.drawer.scrollHeight; });
 			this.message = '';
 			messageField.focus();
 		}

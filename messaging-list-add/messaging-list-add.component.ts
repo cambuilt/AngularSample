@@ -40,7 +40,8 @@ export class MessagingListAddComponent implements AfterViewInit {
 		if (this.pristineObject !== JSON.stringify(this.broadcastGroup)) {
 			const dialogRef = this.errorAlert.open(UnsavedChangesDialogComponent, {
 				width: '300px',
-				backdropClass: 'drawer-overlay-blank'
+				backdropClass: 'drawer-overlay-blank',
+				autoFocus: false
 			});
 			dialogRef.beforeClose().subscribe(result => {
 				if (document.body.querySelector('.add-overlay')) {
@@ -48,7 +49,6 @@ export class MessagingListAddComponent implements AfterViewInit {
 				}
 				if (result) {
 					this.save();
-					this.onSave.emit(this.broadcastGroup);
 				}
 				this.closeDrawer();
 			});

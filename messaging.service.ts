@@ -48,49 +48,50 @@ export class MessagingService implements OnDestroy, OnInit {
 	}
 
 	get mysocket() {
+		console.log('mySocket: ', this._mysocket);
 		if (this.authService._isLoggedIn === true) {
-		if (!this._mysocket) {
-			if (this.online === true) {
-				const urlRole = this.authService.currentUser.role === 'RMP_TSA' ? 'TSA' : 'RSA';
-				this._mysocket = new WebSocket(`wss://${this.authService.subdomain === '' ? '' : this.authService.subdomain + '.'}emylabcollect.com/csp/rmp/ws/Rhodes.RMP.${urlRole}User.WebSocketController.cls?CSPCHD=${this.authService.sessionToken()}&CSPSHARE=1`, 'chat');
-				console.log('opening socket...');
-				this._mysocket.onopen = (event) => {
-					console.log('connected to socket');
-					this.socketConnected = true;
-				};
+			if (!this._mysocket) {
+				if (this.online === true) {
+					const urlRole = this.authService.currentUser.role === 'RMP_TSA' ? 'TSA' : 'RSA';
+					this._mysocket = new WebSocket(`wss://${this.authService.subdomain === '' ? '' : this.authService.subdomain + '.'}emylabcollect.com/csp/rmp/ws/Rhodes.RMP.${urlRole}User.WebSocketController.cls?CSPCHD=${this.authService.sessionToken()}&CSPSHARE=1`, 'chat');
+					console.log('opening socket...');
+					this._mysocket.onopen = (event) => {
+						console.log('connected to socket');
+						this.socketConnected = true;
+					};
 
-				this._mysocket.onmessage = (event) => {
-					// console.log('Got message! event is ', event);
-					if (event.data === 'ERROR') {
-						console.log('onmessage error.', event);
-					} else {
-						this.messageStore = JSON.parse(event.data);
-						this.messageSubject.next(this.messageStore);
-					}
-				};
+					this._mysocket.onmessage = (event) => {
+						// console.log('Got message! event is ', event);
+						if (event.data === 'ERROR') {
+							console.log('onmessage error.', event);
+						} else {
+							this.messageStore = JSON.parse(event.data);
+							this.messageSubject.next(this.messageStore);
+						}
+					};
 
-				this._mysocket.onerror = (event) => {
-					console.log('WebSocket error:', event);
-				};
+					this._mysocket.onerror = (event) => {
+						console.log('WebSocket error:', event);
+					};
 
-				this._mysocket.onclose = (event) => {
-					console.log('event on close is ', event);
-					this.socketConnected = false;
-					if (event) {
-						console.log('connection was closed: ', event.code);
-						this._mysocket = undefined;
-						// this.authService.logout();
-					} else {
-						this._mysocket = undefined;
-						// this.authService.logout();
-						console.log('connection was closed');
-					}
-				};
+					this._mysocket.onclose = (event) => {
+						console.log('event on close is ', event);
+						this.socketConnected = false;
+						if (event) {
+							console.log('connection was closed: ', event.code);
+							this._mysocket = undefined;
+							// this.authService.logout();
+						} else {
+							this._mysocket = undefined;
+							// this.authService.logout();
+							console.log('connection was closed');
+						}
+					};
+				}
 			}
+			return this._mysocket;
 		}
-		return this._mysocket;
 	}
-}
 
 	getLogout() {
 		if (this.logoutSubscription) {
@@ -108,14 +109,14 @@ export class MessagingService implements OnDestroy, OnInit {
 	sendToSocket(data) {
 		if (this.online === true) {
 			try {
-				// console.log('sent to socket: ', JSON.stringify(data));
+				console.log('sent to socket:', JSON.stringify(data));
 				if (this.mysocket.readyState === 0) {
 					setTimeout(() => this.sendToSocket(data), 1000);
 				} else {
 					this.mysocket.send(JSON.stringify(data) + String.fromCharCode(3));
 				}
 			} catch (error) {
-				console.log('socket send error: ', error.message);
+				console.log('socket send error:', error.message);
 				setTimeout(() => this.sendToSocket(data), 1000);
 			}
 		}

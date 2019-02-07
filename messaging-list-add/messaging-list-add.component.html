@@ -8,7 +8,9 @@
 		<mat-card style="height:70px;">
 			<div class="card-heading" l10nTranslate>Header.List name</div>
 			<mat-form-field class='firstField'>
-				<input matInput placeholder="{{translation.translate('Label.Name')}}" id='firstListField' [(ngModel)]="broadcastGroup.Name" #name=ngModel genericRequired />
+				<input matInput placeholder="{{translation.translate('Label.Name')}}" id='firstListField' [(ngModel)]="broadcastGroup.Name" #name=ngModel charLimit [maximumLength]=25 
+				maxlength="25" genericRequired />
+				<mat-hint align="end">{{broadcastGroup.Name?.length}}/25</mat-hint>
 				<mat-error *ngIf="name.errors">{{name.errors.message}}</mat-error>
 			</mat-form-field>
 		</mat-card>
@@ -56,14 +58,14 @@
 			</div>
 			<!-- These exact settings are needed for 24px top and bottom -->
 			<div class='selectDrawerButton' style="padding-top: 32px; padding-bottom: 14px;">
-				<button *ngIf="listType === 'Users'" mat-button (click)="listUser.show(true)" l10nTranslate>Label.Select User</button>
-				<button *ngIf="listType === 'Tenants'" mat-button (click)="listTenant.show(true)" l10nTranslate>Label.Select Tenant</button>
+				<button *ngIf="listType === 'Users'" id="selectUserButton" mat-button (click)="listUser.show(true)" l10nTranslate>Label.Select User</button>
+				<button *ngIf="listType === 'Tenants'" id="selectTenantButton" mat-button (click)="listTenant.show(true)" l10nTranslate>Label.Select Tenant</button>
 			</div>
 		</mat-card>
 	</div>
 	<div class="drawer-footer">
-		<button class="btn-save" *ngIf="selectedList === ''" (click)='save();' mat-button l10nTranslate>Label.Create</button>
-		<button class="btn-save" *ngIf="selectedList !== ''" (click)='save();' mat-button l10nTranslate>Label.Save</button>
+		<button class="btn-save" id="buttonCreate" *ngIf="selectedList === ''" (click)='save();' mat-button l10nTranslate>Label.Create</button>
+		<button class="btn-save" id="buttonEditSave" *ngIf="selectedList !== ''" (click)='save();' mat-button l10nTranslate>Label.Save</button>
 	</div>
 </div>
 <rmp-user-selector #listUser id="listUser" (onSave)='processRecipientSelect($event)' [usersInput]='broadcastGroup.Recipients' [parentData]="{title: 'MessagingListAdd'}"></rmp-user-selector>
